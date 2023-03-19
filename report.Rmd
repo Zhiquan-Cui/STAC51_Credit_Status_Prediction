@@ -1,0 +1,19 @@
+---
+title: "**Predicting the Status of Credit**"
+date: "`r Sys.Date()`"
+output: 
+    pdf_document:
+      number_sections: yes
+    html_document:
+      toc: true
+linestretch: 1.5
+fontsize: 12pt
+---
+
+\newpage
+\tableofcontents
+\newpage
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
