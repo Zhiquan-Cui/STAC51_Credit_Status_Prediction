@@ -1,10 +1,84 @@
 ---
-title: "EDA"
+title: "Exploratory Data Analysis"
 date: "`r Sys.Date()`"
 output: pdf_document
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+## Load Required Libraries
+```{r, error=FALSE, warning=FALSE, message=FALSE, results='hide'}
+library(dplyr)
+library(insight)
+library(knitr)
+library(kableExtra)
+library(ggplot2)
+library(tidyverse)
+```
+
+## Load Data & Inspect Variables
+```{r}
+# Read the data
+data <- read.csv("Credit.csv")
+# Check the number of observations and number of variables
+n <- nrow(data)
+m <- ncol(data)
+n
+m
+# Check the data
+kable(head(data[, 1:8]), format = "latex", align=rep("c", 8))
+kable(head(data[, 9:14]), format = "latex", align=rep("c", 6))
+kable(head(data[, 15:21]), format = "latex", align=rep("c", 7))
+# Check invalid or missing values
+anyNA(data)
+# Check the data type of each column
+sapply(data, class)
+```
+
+As we can see from the above outputs, there is no NaN values so the data is clean.
+And all of the columns are of type integer. Some of them are quantitative variable while some of 
+them are qualitative variables. Here is a summary of the variables:
+
+* status: status of the debtor's checking account with the bank (categorical)
+* duration: credit duration in months (quantitative)
+* credit_history: history of compliance with previous or concurrent credit contracts (categorical)
+* purpose: purpose for which the credit is needed (categorical)
+* amount: credit amount in DM (quantitative; result of monotonic transformation; actual data and type of transformation unknown)
+* savings: debtor's savings (categorical)
+* employment_duration: duration of debtor's employment with current employer (ordinal; discretized quantitative)
+* installment_rate: credit installments as a percentage of debtor's disposable income (ordinal; discretized quantitative)
+* personal_status_sex: combined information on sex and marital status (categorical)
+* other_debtors: is there another debtor or a guarantor for the credit? (categorial)
+* present_residence: length of time (in years) the debtor lives in the present residence (ordinal; discretized quantitative)
+* property: the debtor's most valuable property (ordinal)
+* age: age in years (quantitative)
+* other_installment_plans: installment plans from providers other than the credit-giving bank (categorical)
+* housing: type of housing the debtor lives in (categorical)
+* number_credits: number of credits including the current one the debtor has (or had) at the bank (ordinal; discretized quantitative)
+* job: quality of debtor's job (ordinal)
+* people_liable: number of persons who financially depend on the debtor (binary; discretized quantitative)
+* telephone: is there a telephone landline registered on the debtor's name? (binary)
+* foreign_ worker: is the debtor a foreign worker? (binary)
+* credit_risk: has the credit contract been complied with (good) or not (bad)? (binary)
+
+We can see that the **quantitative variables** include duration, amount and age, while **qualitative variables** include
+status, credit_history, purpose, savings, employment_duration, installment_rate, personal_status_sex, other_debtors, present_residence, property, other_installment_plans, housing, number_credits, job, people_liable, telephone, foreign_worker and credit_risk.
+
+## Univariate Analysis & Visualization
+
+First we will perform univariate analysis on each of the variables and look at their distribution. Here is the 
+summary statistics:
+```{r}
+summary(data)
+```
+
+Next, let us check the histograms of the quantitative variables:
+```{r results='hide'}
+par(mfrow=c(1,3))
+lapply(c("duration", "amount", "age"), FUN=function(c)
+  hist(data[, c], xlab=c, main=paste("Histogram of", c)))
+```
+
+Then, let us check the barplots of qualitative variables:
+```{r}
+
 ```
 
