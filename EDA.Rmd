@@ -1,12 +1,18 @@
 ---
-title: "Exploratory Data Analysis"
+title: \vspace{3.5in} **Exploratory Data Analysis**
+author: "**Zhiquan Cui**"
 date: "`r Sys.Date()`"
 output:
   pdf_document:
     latex_engine: xelatex
+    number_section: TRUE
 ---
 
-## Load Required Libraries
+\newpage
+\tableofcontents
+\newpage
+
+# Load Required Libraries
 ```{r, error=FALSE, warning=FALSE, message=FALSE, results='hide'}
 library(dplyr)
 library(insight)
@@ -16,9 +22,10 @@ library(ggplot2)
 library(tidyverse)
 library(corrplot)
 library(patchwork)
+library(rcompanion)
 ```
 
-## Load Data & Inspect Variables
+# Load Data & Inspect Variables
 ```{r}
 # Read the data
 data <- read.csv("Credit.csv")
@@ -66,36 +73,45 @@ them are qualitative variables. Here is a summary of the variables:
 We can see that the **quantitative variables** include duration, amount and age, while **qualitative variables** include
 status, credit_history, purpose, savings, employment_duration, installment_rate, personal_status_sex, other_debtors, present_residence, property, other_installment_plans, housing, number_credits, job, people_liable, telephone, foreign_worker and credit_risk.
 
-## Univariate Analysis & Visualization
-
+# Univariate Data Analysis & Visualization
+## Histogram of Quantitative Variables
 First we will perform univariate analysis on each of the variables and look at their distribution. Here is the 
 summary statistics:
 ```{r}
 quant_vars <- c("duration", "amount", "age")
 qual_vars <- c("status", "credit_history", "purpose", "savings", "employment_duration",
                "installment_rate", "personal_status_sex", "other_debtors", "present_residence", 
-               "property", "other_installment_plans", "housing", "number_credits", "job", "people_liable",
-               "telephone", "foreign_worker")
+               "property", "other_installment_plans", "housing", "number_credits", "job", 
+               "people_liable", "telephone", "foreign_worker")
 summary(data[, quant_vars])
 ```
 
 Next, let us check the histograms of the quantitative variables:
-```{r results='hide'}
-par(mfrow=c(1,3))
-lapply(quant_vars, FUN=function(c)
-  hist(data[, c], xlab=c, main=paste("Histogram of", c)))
+```{r message=FALSE, fig.height=3, fig.width=5, fig.align='center'}
+data[, quant_vars] %>% 
+  gather() %>% 
+  ggplot(aes(value)) +
+    facet_wrap(~ key, scales = "free") +
+    geom_histogram() + 
+    theme_light()
 ```
 
+## Barplot of Qualitative Variables
 Then, let us check the barplots of qualitative variables:
-```{r results='hide'}
-par(mfrow=c(2, 3))
-lapply(qual_vars, FUN=function(c)hist(data[, c], xlab=c, main=paste("Histogram of", c)))
+```{r}
+data[, qual_vars] %>%
+  gather() %>% 
+  ggplot(aes(value)) +
+    facet_wrap(~ key, scales = "free") +
+    geom_bar() + 
+    theme_light()
 ```
 
+## Boxplot of Quantitative Variables
 After checking the histograms and barplots, we will check the boxplots of the quantitative variables.
 Here we will not check barplots for qualitative variables because it only makes sense to examine the median,
 first and third quartiles and maximum value for quantitative variables. 
-```{r}
+```{r fig.align='center', fig.height=3, fig.width=5}
 g1 <- ggplot(data, aes(x = amount)) + geom_boxplot(fill="#FEF8DD") 
 g2 <- ggplot(data, aes(x = duration)) + geom_boxplot(fill="#E1F8DC") 
 g3 <- ggplot(data, aes(x = age)) + geom_boxplot(fill="#ACDDDE") 
@@ -106,6 +122,7 @@ From the above box plots, we can see that there are a few outliers for the varia
 we look at the histogram of variable amount, we can see that it is a right skewed distribution
 with a long right tail, which results in these outliers.
 
+## Sample Odds of Binary Variables
 For binary variables people_liable, telephone, foreign_worker and credit_risk, we can calculate and 
 interpret the sample odds:
 ```{r}
@@ -126,10 +143,83 @@ is 2.33 times as likely as having a bad credit. Similarly, the estimated probabi
 of a person to have a telephone landline registered on his/her name is 0.68 times 
 as likely as not having such a telephone landline.
 
-## Multivariate Analysis
+# Multivariate Data Analysis & Visualization
+## Quantitative Variable
 First, let us look at the correlation plots of the quantitative variables.
-```{r}
+```{r fig.align='center', fig.height=3, fig.width=5}
 corrplot.mixed(cor(data[quant_vars]), lower='number', upper='ellipse', order='AOE')
 ```
 
-From the above correlation plot, we can see a strong correlation between amount and duration.
+From the above correlation plot, we can see that the correlation coefficient between amount and duration is as high as 0.62, which indicates a strong positive correlation between the two variables. This also makes sense intuitively because the longer credit duration one has in months, he/she will have a higher chance to build up his/her credit and obtain a higher credit amount. Similarly, if one has a high credit amount, then he/she is more likely to have a long credit duration. In order to avoid multicollinearity, we will drop the variable amount in our model.
+
+## Qualitative Variables
+After examining the quantitative variables, we will now look at the qualitative variables. Since they are not continuous and numeric data, we should not use the same methodology as above. Instead, we will use Pearson's Chi-sq Test of Indepence and Cramer's V designed for qualitative variables to examine the data.
+```{r}
+Pearson_chisq_test <- data.frame(matrix(0, ncol = length(qual_vars), 
+                                nrow = length(qual_vars)), row.names = qual_vars)
+colnames(Pearson_chisq_test) <- qual_vars
+for (var in qual_vars) {
+  for (var_2 in qual_vars) {
+    test <- chisq.test(table(data[, var], data[, var_2]), simulate.p.value = TRUE)
+    Pearson_chisq_test[var, var_2] <- test$p.value
+  }
+}
+kable(Pearson_chisq_test[, 1:5], format = "latex")
+kable(Pearson_chisq_test[, 6:10], format = "latex")
+kable(Pearson_chisq_test[, 11:15], format = "latex")
+kable(Pearson_chisq_test[, 16:17], format = "latex")
+```
+
+Based on the above table, we conclude that the following variables are dependent 
+to most of the variables with $\alpha=0.05$ according to Pearson's Chi-sq Test of Independence:
+
+* purpose
+* employment_duration
+* property
+* housing
+* job
+* people_liable
+* number_credits
+* credit_history
+
+```{r}
+Cramer_v <- data.frame(matrix(0, ncol = length(qual_vars), 
+                      nrow = length(qual_vars)), row.names = qual_vars)
+colnames(Cramer_v) <- qual_vars
+for (var in qual_vars) {
+  for (var_2 in qual_vars) {
+    Cramer_v[var, var_2] <- cramerV(table(data[, var], data[, var_2]))
+  }
+}
+kable(Cramer_v[, 1:5], format = "latex")
+kable(Cramer_v[, 6:10], format = "latex")
+kable(Cramer_v[, 11:15], format = "latex")
+kable(Cramer_v[, 16:17], format = "latex")
+```
+
+Based on the above Cramer's V table, we conclude that we will drop the following 
+variables because of their high correlation to other variables:
+
+* job
+* credit_history
+* purpose
+* employment_duration
+* housing
+* people_liable
+
+To summarize, the variables we will use in model building are:
+
+* status
+* duration
+* savings
+* employment_duration
+* installment_rate
+* personal_status_sex
+* other_debtors
+* present_residence
+* property
+* age
+* other_installment_plans
+* number_credit
+* telephone
+* foreign_worker
