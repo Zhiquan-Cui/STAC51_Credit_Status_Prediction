@@ -23,6 +23,7 @@ library(tidyverse)
 library(corrplot)
 library(patchwork)
 library(rcompanion)
+library(gridExtra)
 ```
 
 # Load Data & Inspect Variables
@@ -35,9 +36,9 @@ m <- ncol(data)
 n
 m
 # Check the data
-kable(head(data[, 1:8]), format = "latex", align=rep("c", 8))
-kable(head(data[, 9:14]), format = "latex", align=rep("c", 6))
-kable(head(data[, 15:21]), format = "latex", align=rep("c", 7))
+kable(head(data[, 1:8]), format = "latex", align=rep("c", 8), booktabs=TRUE)
+kable(head(data[, 9:14]), format = "latex", align=rep("c", 6), booktabs=TRUE)
+kable(head(data[, 15:21]), format = "latex", align=rep("c", 7), booktabs=TRUE)
 # Check invalid or missing values
 anyNA(data)
 # Check the data type of each column
@@ -82,7 +83,7 @@ quant_vars <- c("duration", "amount", "age")
 qual_vars <- c("status", "credit_history", "purpose", "savings", "employment_duration",
                "installment_rate", "personal_status_sex", "other_debtors", "present_residence", 
                "property", "other_installment_plans", "housing", "number_credits", "job", 
-               "people_liable", "telephone", "foreign_worker")
+               "people_liable", "telephone", "foreign_worker", "credit_risk")
 summary(data[, quant_vars])
 ```
 
@@ -98,7 +99,7 @@ data[, quant_vars] %>%
 
 ## Barplot of Qualitative Variables
 Then, let us check the barplots of qualitative variables:
-```{r}
+```{r fig.height=5, fig.width=10, fig.align='center'}
 data[, qual_vars] %>%
   gather() %>% 
   ggplot(aes(value)) +
@@ -106,6 +107,10 @@ data[, qual_vars] %>%
     geom_bar() + 
     theme_light()
 ```
+
+As we can see, the response variable credit risk is a binary variable while we 
+have more than 2 predictors. This indicates that it is a good idea to use 
+Multiple Logistic Regression as our model.
 
 ## Boxplot of Quantitative Variables
 After checking the histograms and barplots, we will check the boxplots of the quantitative variables.
@@ -150,7 +155,26 @@ First, let us look at the correlation plots of the quantitative variables.
 corrplot.mixed(cor(data[quant_vars]), lower='number', upper='ellipse', order='AOE')
 ```
 
-From the above correlation plot, we can see that the correlation coefficient between amount and duration is as high as 0.62, which indicates a strong positive correlation between the two variables. This also makes sense intuitively because the longer credit duration one has in months, he/she will have a higher chance to build up his/her credit and obtain a higher credit amount. Similarly, if one has a high credit amount, then he/she is more likely to have a long credit duration. In order to avoid multicollinearity, we will drop the variable amount in our model.
+From the above correlation plot, we can see that the correlation coefficient between amount and duration is as high as 0.62, which indicates a strong positive correlation between the two variables. This also makes sense intuitively because the longer credit duration one has in months, he/she will have a higher chance to build up his/her credit and obtain a higher credit amount. Similarly, if one has a high credit amount, then he/she is more likely to have a long credit duration. In order to avoid multicollinearity, we will consider droping one of amount and duration in our model. However, before making a decision, we shall examine the side by side box plots.
+
+```{r fig.align='center', fig.height=3, fig.width=10}
+g1 <- ggplot(data, aes(x=as.factor(credit_risk), y=amount, color=credit_risk)) +
+      geom_boxplot() + xlab("Credit Risk")
+g2 <- ggplot(data, aes(x=as.factor(credit_risk), y=duration, color=credit_risk)) +
+      geom_boxplot() + xlab("Credit Risk")
+g3 <- ggplot(data, aes(x=as.factor(credit_risk), y=age, color=credit_risk)) +
+      geom_boxplot() + xlab("Credit Risk")
+
+grid.arrange(g1, g2, g3, nrow=1)
+```
+
+From the above side by side box plots, we can see that for variables duration and age,
+there are significant differences on the box plots between two levels of credit risks.
+This indicates a significant association between credit risk and these two variables.
+However, we don't see a significant difference between two credit risk levels for 
+variable amount.
+
+Therefore, we will drop the variable amount.
 
 ## Qualitative Variables
 After examining the quantitative variables, we will now look at the qualitative variables. Since they are not continuous and numeric data, we should not use the same methodology as above. Instead, we will use Pearson's Chi-sq Test of Indepence and Cramer's V designed for qualitative variables to examine the data.
@@ -164,62 +188,58 @@ for (var in qual_vars) {
     Pearson_chisq_test[var, var_2] <- test$p.value
   }
 }
-kable(Pearson_chisq_test[, 1:5], format = "latex")
-kable(Pearson_chisq_test[, 6:10], format = "latex")
-kable(Pearson_chisq_test[, 11:15], format = "latex")
-kable(Pearson_chisq_test[, 16:17], format = "latex")
+kable(Pearson_chisq_test[, 1:6], format = "latex", booktabs=TRUE) %>%
+  kable_styling(font_size = 6, latex_options = "hold_position")
+kable(Pearson_chisq_test[, 7:12], format = "latex", booktabs=TRUE) %>%
+  kable_styling(font_size = 6, latex_options = "hold_position")
+kable(Pearson_chisq_test[, 13:17], format = "latex", booktabs=TRUE) %>%
+  kable_styling(font_size = 6, latex_options = "hold_position")
 ```
 
-Based on the above table, we conclude that the following variables are dependent 
-to most of the variables with $\alpha=0.05$ according to Pearson's Chi-sq Test of Independence:
+Based on the above table, we conclude that the following predictors are dependent 
+to most of the predictors with $\alpha=0.05$ according to Pearson's Chi-sq Test of Independence,
+and we consider dropping these predictors:
 
+* job
+* credit_history
 * purpose
 * employment_duration
-* property
 * housing
-* job
 * people_liable
+
+```{r include=FALSE}
+# Cramer_v <- data.frame(matrix(0, ncol = length(qual_vars),
+#                       nrow = length(qual_vars)), row.names = qual_vars)
+# colnames(Cramer_v) <- qual_vars
+# for (var in qual_vars) {
+#   for (var_2 in qual_vars) {
+#     Cramer_v[var, var_2] <- cramerV(table(data[, var], data[, var_2]))
+#   }
+# }
+# kable(Cramer_v[, 1:5], format = "latex")
+# kable(Cramer_v[, 6:10], format = "latex")
+# kable(Cramer_v[, 11:15], format = "latex")
+# kable(Cramer_v[, 16:17], format = "latex")
+```
+
+Also, we can see that the following predictors have very weak association
+with the response variable:
+
+* installment_rate
+* personal_status_sex
+* other_debtors
+* present_residence
 * number_credits
-* credit_history
-
-```{r}
-Cramer_v <- data.frame(matrix(0, ncol = length(qual_vars), 
-                      nrow = length(qual_vars)), row.names = qual_vars)
-colnames(Cramer_v) <- qual_vars
-for (var in qual_vars) {
-  for (var_2 in qual_vars) {
-    Cramer_v[var, var_2] <- cramerV(table(data[, var], data[, var_2]))
-  }
-}
-kable(Cramer_v[, 1:5], format = "latex")
-kable(Cramer_v[, 6:10], format = "latex")
-kable(Cramer_v[, 11:15], format = "latex")
-kable(Cramer_v[, 16:17], format = "latex")
-```
-
-Based on the above Cramer's V table, we conclude that we will drop the following 
-variables because of their high correlation to other variables:
-
 * job
-* credit_history
-* purpose
-* employment_duration
-* housing
 * people_liable
+* telephone
+* foreign_worker
 
 To summarize, the variables we will use in model building are:
 
 * status
 * duration
 * savings
-* employment_duration
-* installment_rate
-* personal_status_sex
-* other_debtors
-* present_residence
 * property
 * age
 * other_installment_plans
-* number_credit
-* telephone
-* foreign_worker
