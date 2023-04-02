@@ -3,30 +3,29 @@ title: "Model selection"
 author: "Lu Zheng"
 date: "2023-03-30"
 output:
-  html_document:
-    df_print: paged
+  pdf_document:
+    latex_engine: xelatex
+    number_section: TRUE
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-```
-
+# Load Required Libraries
 ```{r}
-getwd()
-setwd("C:/Users/Mr.Lulu/Documents/GitHub/STAC51_Credit_Status_Prediction")
+library(boot)
+library(pROC)
+library(ROCR)
+```
+# Load the data
+```{r}
 data.credit = read.csv("Credit.csv")
-data.credit
-
+# Transform categorical variables
 data.credit$credit_risk = as.factor(data.credit$credit_risk)
-
-# data.credit$status  = as.factor(data.credit$status)
-# data.credit$savings = as.factor(data.credit$savings)
-# data.credit$property = as.ordered(data.credit$property)
-# data.credit$other_installment_plans = as.factor(data.credit$other_installment_plans)
-
+data.credit$status  = as.factor(data.credit$status)
+data.credit$savings = as.factor(data.credit$savings)
+data.credit$property = as.ordered(data.credit$property)
+data.credit$other_installment_plans = as.factor(data.credit$other_installment_plans)
 ```
 
-# Main effect model
+# Split the data into training set and testing set
 ```{r}
 set.seed(1006742107)
 
@@ -36,19 +35,33 @@ traindata = data.credit[index, ]
 testdata = data.credit[-index, ]
 ```
 
+# Main effect model
 ## Training model
 ### Forward method
 ```{r}
-step(glm(credit_risk ~ 1, family = binomial, data = traindata), scope = ~status + duration + savings + property + age + other_installment_plans, direction = "forward", test = "Chisq")
+step(glm(credit_risk ~ 1, family = binomial, data = traindata), scope = 
+       ~status + duration + savings + property + age +
+       other_installment_plans, direction = "forward", test = "Chisq")
 ```
 
 ### Backward method
 ```{r}
-step(glm(credit_risk ~status + duration + savings + property + age + other_installment_plans, family = binomial, data = traindata), test = "Chisq")
+step(glm(credit_risk ~status + duration + savings + property + age + 
+           other_installment_plans, family = binomial, data = traindata), test = "Chisq")
 ```
 
 
 From above coding, we could find that both forward selection and backward elimination choose the model: glm(credit_risk ~status + duration + savings + property + age + other_installment_plans, family = binomial, data = traindata)
+
+\[logit(\hat\pi)=-0.72+0.45\cdot S_1+0.86\cdot S_2+1.75\cdot S_3-0.03\cdot D+0.26\cdot SV_1+0.14\cdot SV_2+1.50SV_3+0.73SV_4-0.58\cdot P_L-0.16\cdot P_Q-0.07\cdot P_C+0.02\cdot A+0.20\cdot O_1+0.59\cdot O_2\]
+
+where
+* $S_i$'s are dummy variables for status
+* D is duration
+* $SV$'s are dummy variables for savings
+* $P_i$'s are dummy variables for property
+* A is age
+* $O_i$'s are dummy variables for other_installment_plans
 
 ```{r}
 bestmodel.1 = glm(credit_risk ~status + duration + savings + property + age + other_installment_plans, family = binomial, data = traindata)
@@ -58,80 +71,27 @@ summary(bestmodel.1)
 ## Testing model
 ```{r}
 pred.1 = predict(bestmodel.1, newdata = testdata)
-
-# mse <- mean((pred.1 - testdata$credit_risk)^2)
-# rsq <- cor(pred.1, testdata$credit_risk)^2 # Can not run, since y(i.e. credit_risk) has to be value.
-# cat("MSE:", mse, "\n")
-# cat("R-squared:", rsq, "\n")
-
-plot(testdata$credit_risk, pred.1, xlab = "Actual credit_risk", ylab = "Predicted credit_risk")
-abline(0, 1, col = "orange")
+plot(testdata$credit_risk, inv.logit(pred.1), xlab = "Actual credit_risk", ylab = "Predicted credit_risk")
 ```
 
-From the plot, we find that the main effect model can not describe the actual data well obviously.
+From the plot, we find that the main effect model can describe the actual data fairly well.
 
 
 # Interaction model
 ## Training model
 ### Forward method
 ```{r}
-step(glm(credit_risk ~ 1, family = binomial, data = traindata), scope = ~status * duration * savings * property * age * other_installment_plans, direction = "forward", test = "Chisq")
+bestmodel.3 <- step(glm(credit_risk ~ 1, family = binomial, data = traindata), scope = ~status * duration * savings * property * age * other_installment_plans, direction = "forward", test = "Chisq")
 ```
 
-### Backward method 
-```{r}
-step(glm(credit_risk ~ status * duration * savings * property * age * other_installment_plans, family = binomial, data = traindata), test = "Chisq")
-```
 
 ## Testing model
-```{r}
-bestmodel.2 = glm(formula = credit_risk ~ status + duration + savings + other_installment_plans + 
-    property + age + duration:savings, family = binomial, data = traindata)
 
-pred.2 <- predict(bestmodel.2, newdata = testdata)
-
-# mse <- mean((pred.2 - testdata$credit_risk)^2)
-# rsq <- cor(pred.2, testdata$credit_risk)^2
-# cat("MSE:", mse, "\n")
-# cat("R-squared:", rsq, "\n")
-
-plot(testdata$credit_risk, pred.2, xlab = "Actual credit_risk", ylab = "Predicted credit_risk")
-abline(0, 1, col = "blue")
-```
-
-```{r}
-bestmodel.3 = glm(formula = credit_risk ~ status + duration + savings + property + 
-    age + other_installment_plans + status:duration + status:savings + 
-    duration:savings + status:property + duration:property + 
-    savings:property + status:age + duration:age + savings:age + 
-    property:age + status:other_installment_plans + duration:other_installment_plans + 
-    savings:other_installment_plans + property:other_installment_plans + 
-    age:other_installment_plans + status:duration:savings + status:duration:property + 
-    status:savings:property + duration:savings:property + status:savings:age + 
-    status:property:age + duration:property:age + savings:property:age + 
-    status:duration:other_installment_plans + status:savings:other_installment_plans + 
-    duration:savings:other_installment_plans + status:property:other_installment_plans + 
-    duration:property:other_installment_plans + savings:property:other_installment_plans + 
-    status:age:other_installment_plans + savings:age:other_installment_plans + 
-    property:age:other_installment_plans + status:duration:savings:property + 
-    status:savings:property:age + status:duration:savings:other_installment_plans + 
-    status:duration:property:other_installment_plans + status:savings:property:other_installment_plans + 
-    duration:savings:property:other_installment_plans + status:savings:age:other_installment_plans + 
-    status:property:age:other_installment_plans + savings:property:age:other_installment_plans + 
-    status:duration:savings:property:other_installment_plans + 
-    status:savings:property:age:other_installment_plans, family = binomial, 
-    data = traindata)
-
-
+```{r message=FALSE}
 pred.3 <- predict(bestmodel.3, newdata = testdata)
-
-# mse <- mean((pred.3 - testdata$credit_risk)^2)
-# rsq <- cor(pred.3, testdata$credit_risk)^2
-# cat("MSE:", mse, "\n")
-# cat("R-squared:", rsq, "\n")
-
-plot(testdata$credit_risk, pred.3, xlab = "Actual credit_risk", ylab = "Predicted credit_risk")
-abline(0, 1, col = "pink")
+plot(testdata$credit_risk, inv.logit(pred.3), xlab = "Actual credit_risk", ylab = "Predicted credit_risk")
+roc(testdata$credit_risk~inv.logit(pred.3), plot=TRUE, main="ROC Curve", col="blue")
+auc(testdata$credit_risk~inv.logit(pred.3))
 ```
 
 
