@@ -1,19 +1,338 @@
 ---
-title: "**Predicting the Status of Credit**"
+title: \vspace{3.5in} **Predicting the Status of Credit**
 date: "`r Sys.Date()`"
 output: 
     pdf_document:
       number_sections: yes
     html_document:
       toc: true
-linestretch: 1.5
-fontsize: 12pt
 ---
+\begin{center}
+Lu Zheng: Model Building, Model Selection\\
+\vspace{0.5in}
+Yuxin Yao: Model Building, Model Selection\\
+\vspace{0.5in}
+Zhiquan Cui 1005835857: Exploratory Data Analysis, Model Validation and Diagnostics
+\end{center}
 
 \newpage
 \tableofcontents
 \newpage
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+```{r, include=FALSE, error=FALSE, warning=FALSE, message=FALSE, results='hide'}
+library(dplyr)
+library(insight)
+library(knitr)
+library(kableExtra)
+library(ggplot2)
+library(tidyverse)
+library(corrplot)
+library(patchwork)
+library(rcompanion)
+library(gridExtra)
+library(boot)
+library(pROC)
+library(ROCR)
+```
+
+# Introduction
+
+# Exploratory Data Analysis
+
+## Load Data & Inspect Variables
+```{r}
+# Read the data
+data <- read.csv("Credit.csv")
+# Check the number of observations and number of variables
+n <- nrow(data)
+m <- ncol(data)
+n
+m
+# Check the data
+kable(head(data[, 1:8]), format = "latex", align=rep("c", 8), booktabs=TRUE)
+kable(head(data[, 9:14]), format = "latex", align=rep("c", 6), booktabs=TRUE)
+kable(head(data[, 15:21]), format = "latex", align=rep("c", 7), booktabs=TRUE)
+# Check invalid or missing values
+anyNA(data)
+# Check the data type of each column
+sapply(data, class)
+```
+
+As we can see from the above outputs, there is no NaN values so the data is clean.
+And all of the columns are of type integer. Some of them are quantitative variable while some of 
+them are qualitative variables. Here is a summary of the variables:
+
+* status: status of the debtor's checking account with the bank (categorical)
+* duration: credit duration in months (quantitative)
+* credit_history: history of compliance with previous or concurrent credit contracts (categorical)
+* purpose: purpose for which the credit is needed (categorical)
+* amount: credit amount in DM (quantitative; result of monotonic transformation; actual data and type of transformation unknown)
+* savings: debtor's savings (categorical)
+* employment_duration: duration of debtor's employment with current employer (ordinal; discretized quantitative)
+* installment_rate: credit installments as a percentage of debtor's disposable income (ordinal; discretized quantitative)
+* personal_status_sex: combined information on sex and marital status (categorical)
+* other_debtors: is there another debtor or a guarantor for the credit? (categorial)
+* present_residence: length of time (in years) the debtor lives in the present residence (ordinal; discretized quantitative)
+* property: the debtor's most valuable property (ordinal)
+* age: age in years (quantitative)
+* other_installment_plans: installment plans from providers other than the credit-giving bank (categorical)
+* housing: type of housing the debtor lives in (categorical)
+* number_credits: number of credits including the current one the debtor has (or had) at the bank (ordinal; discretized quantitative)
+* job: quality of debtor's job (ordinal)
+* people_liable: number of persons who financially depend on the debtor (binary; discretized quantitative)
+* telephone: is there a telephone landline registered on the debtor's name? (binary)
+* foreign_ worker: is the debtor a foreign worker? (binary)
+* credit_risk: has the credit contract been complied with (good) or not (bad)? (binary)
+
+We can see that the **quantitative variables** include duration, amount and age, while **qualitative variables** include
+status, credit_history, purpose, savings, employment_duration, installment_rate, personal_status_sex, other_debtors, present_residence, property, other_installment_plans, housing, number_credits, job, people_liable, telephone, foreign_worker and credit_risk.
+
+## Univariate Data Analysis & Visualization
+### Histogram of Quantitative Variables
+First we will perform univariate analysis on each of the variables and look at their distribution. Here is the 
+summary statistics:
+```{r}
+quant_vars <- c("duration", "amount", "age")
+qual_vars <- c("status", "credit_history", "purpose", "savings", "employment_duration",
+               "installment_rate", "personal_status_sex", "other_debtors", "present_residence", 
+               "property", "other_installment_plans", "housing", "number_credits", "job", 
+               "people_liable", "telephone", "foreign_worker", "credit_risk")
+summary(data[, quant_vars])
+```
+
+Next, let us check the histograms of the quantitative variables:
+```{r message=FALSE, fig.height=3, fig.width=5, fig.align='center'}
+data[, quant_vars] %>% 
+  gather() %>% 
+  ggplot(aes(value)) +
+    facet_wrap(~ key, scales = "free") +
+    geom_histogram() + 
+    theme_light()
+```
+
+### Barplot of Qualitative Variables
+Then, let us check the barplots of qualitative variables:
+```{r fig.height=5, fig.width=10, fig.align='center'}
+data[, qual_vars] %>%
+  gather() %>% 
+  ggplot(aes(value)) +
+    facet_wrap(~ key, scales = "free") +
+    geom_bar() + 
+    theme_light()
+```
+
+As we can see, the response variable credit risk is a binary variable while we 
+have more than 2 predictors. This indicates that it is a good idea to use 
+Multiple Logistic Regression as our model.
+
+### Boxplot of Quantitative Variables
+After checking the histograms and barplots, we will check the boxplots of the quantitative variables.
+Here we will not check barplots for qualitative variables because it only makes sense to examine the median,
+first and third quartiles and maximum value for quantitative variables. 
+```{r fig.align='center', fig.height=3, fig.width=5}
+g1 <- ggplot(data, aes(x = amount)) + geom_boxplot(fill="#FEF8DD") 
+g2 <- ggplot(data, aes(x = duration)) + geom_boxplot(fill="#E1F8DC") 
+g3 <- ggplot(data, aes(x = age)) + geom_boxplot(fill="#ACDDDE") 
+g1 + g2 + g3
+```
+
+From the above box plots, we can see that there are a few outliers for the variable amount. If 
+we look at the histogram of variable amount, we can see that it is a right skewed distribution
+with a long right tail, which results in these outliers.
+
+### Sample Odds of Binary Variables
+For binary variables people_liable, telephone, foreign_worker and credit_risk, we can calculate and 
+interpret the sample odds:
+```{r}
+binary_var <- c("Statistics", "people_liable", "telephone", "foreign_worker", "credit_risk")
+odds <- c("Sample Odds")
+for (var in binary_var[2:5]) {
+  if (var == "credit_risk") {y <- sum(data[, var] == 1)}
+  else {y <- sum(data[, var] == 2)}
+  n <- length(data[, var])
+  odds <- append(odds, round(y / (n - y), 2))
+}
+kable(data.frame(t(odds)), col.names = binary_var, format = "latex") %>% 
+  kable_styling(position = "center", latex_options = "hold_position") %>% row_spec(0, bold = TRUE)
+```
+
+Based on our sample, the estimated probability of a person to have good credit
+is 2.33 times as likely as having a bad credit. Similarly, the estimated probability
+of a person to have a telephone landline registered on his/her name is 0.68 times 
+as likely as not having such a telephone landline.
+
+## Multivariate Data Analysis & Visualization
+### Quantitative Variable
+First, let us look at the correlation plots of the quantitative variables.
+```{r fig.align='center', fig.height=3, fig.width=5}
+corrplot.mixed(cor(data[quant_vars]), lower='number', upper='ellipse', order='AOE')
+```
+
+From the above correlation plot, we can see that the correlation coefficient between amount and duration is as high as 0.62, which indicates a strong positive correlation between the two variables. This also makes sense intuitively because the longer credit duration one has in months, he/she will have a higher chance to build up his/her credit and obtain a higher credit amount. Similarly, if one has a high credit amount, then he/she is more likely to have a long credit duration. In order to avoid multicollinearity, we will consider droping one of amount and duration in our model. However, before making a decision, we shall examine the side by side box plots.
+
+```{r fig.align='center', fig.height=3, fig.width=10}
+g1 <- ggplot(data, aes(x=as.factor(credit_risk), y=amount, color=credit_risk)) +
+      geom_boxplot() + xlab("Credit Risk")
+g2 <- ggplot(data, aes(x=as.factor(credit_risk), y=duration, color=credit_risk)) +
+      geom_boxplot() + xlab("Credit Risk")
+g3 <- ggplot(data, aes(x=as.factor(credit_risk), y=age, color=credit_risk)) +
+      geom_boxplot() + xlab("Credit Risk")
+
+grid.arrange(g1, g2, g3, nrow=1)
+```
+
+From the above side by side box plots, we can see that for variables duration and age,
+there are significant differences on the box plots between two levels of credit risks.
+This indicates a significant association between credit risk and these two variables.
+However, we don't see a significant difference between two credit risk levels for 
+variable amount.
+
+Therefore, we will drop the variable amount.
+
+### Qualitative Variables
+After examining the quantitative variables, we will now look at the qualitative variables. Since they are not continuous and numeric data, we should not use the same methodology as above. Instead, we will use Pearson's Chi-sq Test of Indepence and Cramer's V designed for qualitative variables to examine the data.
+```{r}
+Pearson_chisq_test <- data.frame(matrix(0, ncol = length(qual_vars), 
+                                nrow = length(qual_vars)), row.names = qual_vars)
+colnames(Pearson_chisq_test) <- qual_vars
+for (var in qual_vars) {
+  for (var_2 in qual_vars) {
+    test <- chisq.test(table(data[, var], data[, var_2]), simulate.p.value = TRUE)
+    Pearson_chisq_test[var, var_2] <- test$p.value
+  }
+}
+kable(Pearson_chisq_test[, 1:6], format = "latex", booktabs=TRUE) %>%
+  kable_styling(font_size = 6, latex_options = "hold_position")
+kable(Pearson_chisq_test[, 7:12], format = "latex", booktabs=TRUE) %>%
+  kable_styling(font_size = 6, latex_options = "hold_position")
+kable(Pearson_chisq_test[, 13:17], format = "latex", booktabs=TRUE) %>%
+  kable_styling(font_size = 6, latex_options = "hold_position")
+```
+
+Based on the above table, we conclude that the following predictors are dependent 
+to most of the predictors with $\alpha=0.05$ according to Pearson's Chi-sq Test of Independence,
+and we consider dropping these predictors:
+
+* job
+* credit_history
+* purpose
+* employment_duration
+* housing
+* people_liable
+
+```{r include=FALSE}
+# Cramer_v <- data.frame(matrix(0, ncol = length(qual_vars),
+#                       nrow = length(qual_vars)), row.names = qual_vars)
+# colnames(Cramer_v) <- qual_vars
+# for (var in qual_vars) {
+#   for (var_2 in qual_vars) {
+#     Cramer_v[var, var_2] <- cramerV(table(data[, var], data[, var_2]))
+#   }
+# }
+# kable(Cramer_v[, 1:5], format = "latex")
+# kable(Cramer_v[, 6:10], format = "latex")
+# kable(Cramer_v[, 11:15], format = "latex")
+# kable(Cramer_v[, 16:17], format = "latex")
+```
+
+Also, we can see that the following predictors have very weak association
+with the response variable:
+
+* installment_rate
+* personal_status_sex
+* other_debtors
+* present_residence
+* number_credits
+* job
+* people_liable
+* telephone
+* foreign_worker
+
+To summarize, the variables we will use in model building are:
+
+* status
+* duration
+* savings
+* property
+* age
+* other_installment_plans
+
+# Model Building and Model Selection
+## Load the data
+```{r}
+data.credit = read.csv("Credit.csv")
+# Transform categorical variables
+data.credit$credit_risk = as.factor(data.credit$credit_risk)
+data.credit$status  = as.factor(data.credit$status)
+data.credit$savings = as.factor(data.credit$savings)
+data.credit$property = as.ordered(data.credit$property)
+data.credit$other_installment_plans = as.factor(data.credit$other_installment_plans)
+```
+
+## Split the data into training set and testing set
+```{r}
+set.seed(1006742107)
+
+n = nrow(data.credit)
+index = sample(n, round(0.75 * n), replace = FALSE)
+traindata = data.credit[index, ]
+testdata = data.credit[-index, ]
+```
+
+## Main effect model
+### Training model
+#### Forward method
+```{r}
+step(glm(credit_risk ~ 1, family = binomial, data = traindata), scope = 
+       ~status + duration + savings + property + age +
+       other_installment_plans, direction = "forward", test = "Chisq")
+```
+
+#### Backward method
+```{r}
+step(glm(credit_risk ~status + duration + savings + property + age + 
+           other_installment_plans, family = binomial, data = traindata), test = "Chisq")
+```
+
+From above coding, we could find that both forward selection and backward elimination choose the model: glm(credit_risk ~status + duration + savings + property + age + other_installment_plans, family = binomial, data = traindata)
+
+\[logit(\hat\pi)=-0.72+0.45\cdot S_1+0.86\cdot S_2+1.75\cdot S_3-0.03\cdot D+0.26\cdot SV_1+0.14\cdot SV_2+1.50SV_3+0.73SV_4-0.58\cdot P_L-0.16\cdot P_Q\]
+\[-0.07\cdot P_C+0.02\cdot A+0.20\cdot O_1+0.59\cdot O_2\]
+
+where
+* $S_i$'s are dummy variables for status
+* D is duration
+* $SV$'s are dummy variables for savings
+* $P_i$'s are dummy variables for property
+* A is age
+* $O_i$'s are dummy variables for other_installment_plans
+
+```{r}
+bestmodel.1 = glm(credit_risk ~status + duration + savings + property + age + other_installment_plans, family = binomial, data = traindata)
+summary(bestmodel.1)
+```
+
+### Testing model
+```{r}
+pred.1 = predict(bestmodel.1, newdata = testdata)
+plot(testdata$credit_risk, inv.logit(pred.1), xlab = "Actual credit_risk", ylab = "Predicted credit_risk")
+```
+
+From the plot, we find that the main effect model can describe the actual data fairly well.
+
+
+## Interaction model
+### Training model
+#### Forward method
+```{r}
+bestmodel.3 <- step(glm(credit_risk ~ 1, family = binomial, data = traindata), scope = ~status * duration * savings * property * age * other_installment_plans, direction = "forward", test = "Chisq")
+```
+
+### Testing model
+
+```{r message=FALSE}
+pred.3 <- predict(bestmodel.3, newdata = testdata)
+plot(testdata$credit_risk, inv.logit(pred.3), xlab = "Actual credit_risk", ylab = "Predicted credit_risk")
+roc(testdata$credit_risk~inv.logit(pred.3), plot=TRUE, main="ROC Curve", col="blue")
+auc(testdata$credit_risk~inv.logit(pred.3))
 ```
