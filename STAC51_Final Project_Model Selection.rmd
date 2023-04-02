@@ -53,7 +53,8 @@ step(glm(credit_risk ~status + duration + savings + property + age +
 
 From above coding, we could find that both forward selection and backward elimination choose the model: glm(credit_risk ~status + duration + savings + property + age + other_installment_plans, family = binomial, data = traindata)
 
-\[logit(\hat\pi)=-0.72+0.45\cdot S_1+0.86\cdot S_2+1.75\cdot S_3-0.03\cdot D+0.26\cdot SV_1+0.14\cdot SV_2+1.50SV_3+0.73SV_4-0.58\cdot P_L-0.16\cdot P_Q-0.07\cdot P_C+0.02\cdot A+0.20\cdot O_1+0.59\cdot O_2\]
+\[logit(\hat\pi)=-0.72+0.45\cdot S_1+0.86\cdot S_2+1.75\cdot S_3-0.03\cdot D+0.26\cdot SV_1+0.14\cdot SV_2+1.50SV_3+0.73SV_4-0.58\cdot P_L-0.16\cdot P_Q\]
+\[-0.07\cdot P_C+0.02\cdot A+0.20\cdot O_1+0.59\cdot O_2\]
 
 where
 * $S_i$'s are dummy variables for status
