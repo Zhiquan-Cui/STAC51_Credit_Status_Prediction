@@ -33,6 +33,7 @@ library(gridExtra)
 library(boot)
 library(pROC)
 library(ROCR)
+library(ResourceSelection)
 ```
 
 # Introduction
@@ -258,7 +259,7 @@ To summarize, the variables we will use in model building are:
 * other_installment_plans
 
 # Model Building and Model Selection
-## Load the data
+## Data Preparation
 ```{r}
 data.credit = read.csv("Credit.csv")
 # Transform categorical variables
@@ -269,7 +270,9 @@ data.credit$property = as.ordered(data.credit$property)
 data.credit$other_installment_plans = as.factor(data.credit$other_installment_plans)
 ```
 
-## Split the data into training set and testing set
+We will split the dataset into training set and testing set. Here, the split rate
+is set to be 0.75.
+
 ```{r}
 set.seed(1006742107)
 
@@ -280,16 +283,15 @@ testdata = data.credit[-index, ]
 ```
 
 ## Main effect model
-### Training model
 #### Forward method
-```{r}
+```{r, results='hide'}
 step(glm(credit_risk ~ 1, family = binomial, data = traindata), scope = 
        ~status + duration + savings + property + age +
        other_installment_plans, direction = "forward", test = "Chisq")
 ```
 
 #### Backward method
-```{r}
+```{r, results='hide'}
 step(glm(credit_risk ~status + duration + savings + property + age + 
            other_installment_plans, family = binomial, data = traindata), test = "Chisq")
 ```
@@ -312,27 +314,82 @@ bestmodel.1 = glm(credit_risk ~status + duration + savings + property + age + ot
 summary(bestmodel.1)
 ```
 
-### Testing model
-```{r}
-pred.1 = predict(bestmodel.1, newdata = testdata)
-plot(testdata$credit_risk, inv.logit(pred.1), xlab = "Actual credit_risk", ylab = "Predicted credit_risk")
-```
-
-From the plot, we find that the main effect model can describe the actual data fairly well.
-
-
 ## Interaction model
-### Training model
-#### Forward method
-```{r}
+```{r, results='hide'}
 bestmodel.3 <- step(glm(credit_risk ~ 1, family = binomial, data = traindata), scope = ~status * duration * savings * property * age * other_installment_plans, direction = "forward", test = "Chisq")
 ```
 
-### Testing model
 
-```{r message=FALSE}
+# Model Validation and Diagnostics
+
+After choosing the final model, we will perform a model validation and diagnostics
+to examine the robustness of our model. Here, we run the final model with test 
+data and check the resulting ROC, AUC, and perform Goodness of Fit Test.
+
+## ROC Curve and AUC
+```{r message=FALSE, fig.align='center', fig.height=10, fig.width=10}
 pred.3 <- predict(bestmodel.3, newdata = testdata)
+par(mfrow=c(2,2))
 plot(testdata$credit_risk, inv.logit(pred.3), xlab = "Actual credit_risk", ylab = "Predicted credit_risk")
-roc(testdata$credit_risk~inv.logit(pred.3), plot=TRUE, main="ROC Curve", col="blue")
+roc(testdata$credit_risk~inv.logit(pred.3), plot=TRUE, main="ROC Curve", col="blue", print.auc=TRUE)
 auc(testdata$credit_risk~inv.logit(pred.3))
 ```
+
+As we can see from the above results, the area under the ROC is 0.7659, which is
+fairly large. Also, the estimated probability of having good credit is lower when
+the actual credit risk is high compared to when the actual credit risk is low. Based
+on these two results, we can have some confidence on the robustness of the model.
+
+## Hosmer-Lemeshow Test
+Now, we will perform Goodness of Fit Test. Since we are dealing with ungrouped data
+here, we will apply the Hosmer-Lemeshow Test.
+
+```{r}
+saturated_model <- glm(credit_risk~status * duration * savings * property * age * other_installment_plans,
+                       family = binomial, data = traindata)
+hoslem.test(bestmodel.3$y, fitted(bestmodel.3), g=11)
+```
+
+We can see that the p-value of the Hosmer-Lemeshow Test is 0.7761 which is much
+larger than the significance level $\alpha=0.05$. Therefore, we fail to reject the 
+null hypothesis and conclude that the selected model fits the data well.
+
+## Classification Table and Predictive Power
+Next, we will analyse the predictive power of the selected model. 
+```{r}
+# Calculate the cutoff probability
+n <- dim(testdata)[1]
+prop <- sum(testdata$credit_risk == 1) / n
+prop
+
+y <- (testdata$credit_risk == 1) * 1
+predicted <- as.numeric(pred.3 > prop)
+xtabs(~y + predicted)
+```
+We can see that the cutoff probability is 0.708. This actually corresponds to the 
+credit_risk odds ratio of 2.33 we got from Exploratory Data Analysis.
+
+Based on the above classification table, we can calculate the followings:
+\[sensitivity=\frac{130}{130+47}=0.7345\]
+\[specificity=\frac{47}{47+26}=0.6438\]
+Since the model has a high sensitivity and specificity, we have strong confidence that
+the model fits the data well.
+
+## Residual Diagnostics
+```{r fig.align='center', fig.height=5, fig.width=5}
+hist(rstandard(bestmodel.3), main = "Histogram of Standardized Deviance Residuals",
+     xlab = "Standardized Deviance Residual")
+```
+
+Based on the above residual histogram, we can see that there is no extreme value
+of residuals and the majority of the values is between -2 and 2. Therefore, we 
+conclude that the selected model fits the data well.
+
+In summary, we examined the ROC, AUC, Hosmer-Lemeshow Test and Predictive Power of the
+model. We found out the AUC is high, the p-value of Hosmer-Lemeshow Test is very large, the 
+high sensitivity and high specificity of the model indicates a strong predictive power. All
+these clues show that the selected model is a robust model.
+
+# Discussion and Conclusion
+
+# References
