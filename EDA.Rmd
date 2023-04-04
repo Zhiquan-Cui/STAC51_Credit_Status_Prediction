@@ -6,11 +6,13 @@ output:
   pdf_document:
     latex_engine: xelatex
     number_section: TRUE
+    keep_tex: TRUE
 ---
 
 \newpage
 \tableofcontents
 \newpage
+
 
 # Load Required Libraries
 ```{r, error=FALSE, warning=FALSE, message=FALSE, results='hide'}
@@ -175,6 +177,13 @@ However, we don't see a significant difference between two credit risk levels fo
 variable amount.
 
 Therefore, we will drop the variable amount.
+
+```{r fig.align='center', fig.height=3, fig.width=4}
+data <- subset(data, age < 60)
+ggplot(data, aes(x=as.factor(credit_risk), y=age, color=credit_risk)) +
+      geom_boxplot() + xlab("Credit Risk")
+```
+
 
 ## Qualitative Variables
 After examining the quantitative variables, we will now look at the qualitative variables. Since they are not continuous and numeric data, we should not use the same methodology as above. Instead, we will use Pearson's Chi-sq Test of Indepence and Cramer's V designed for qualitative variables to examine the data.
