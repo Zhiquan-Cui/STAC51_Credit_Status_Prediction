@@ -13,6 +13,7 @@ output:
 library(boot)
 library(pROC)
 library(ROCR)
+library(ggplot2)
 ```
 # Load the data
 ```{r}
@@ -23,6 +24,10 @@ data.credit$status  = as.factor(data.credit$status)
 data.credit$savings = as.factor(data.credit$savings)
 data.credit$property = as.ordered(data.credit$property)
 data.credit$other_installment_plans = as.factor(data.credit$other_installment_plans)
+# Remove outliers of age
+data.credit = subset(data.credit, age < 60)
+ggplot(data.credit, aes(x=as.factor(credit_risk), y=age, color=credit_risk)) +
+      geom_boxplot() + xlab("Credit Risk")
 ```
 
 # Split the data into training set and testing set
