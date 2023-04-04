@@ -88,7 +88,7 @@ summary(data[, quant_vars])
 ```
 
 Next, let us check the histograms of the quantitative variables:
-```{r message=FALSE, fig.height=3, fig.width=5, fig.align='center'}
+```{r message=FALSE, fig.height=3, fig.width=7, fig.align='center'}
 data[, quant_vars] %>% 
   gather() %>% 
   ggplot(aes(value)) +
@@ -116,7 +116,7 @@ Multiple Logistic Regression as our model.
 After checking the histograms and barplots, we will check the boxplots of the quantitative variables.
 Here we will not check barplots for qualitative variables because it only makes sense to examine the median,
 first and third quartiles and maximum value for quantitative variables. 
-```{r fig.align='center', fig.height=3, fig.width=5}
+```{r fig.align='center', fig.height=2, fig.width=8}
 g1 <- ggplot(data, aes(x = amount)) + geom_boxplot(fill="#FEF8DD") 
 g2 <- ggplot(data, aes(x = duration)) + geom_boxplot(fill="#E1F8DC") 
 g3 <- ggplot(data, aes(x = age)) + geom_boxplot(fill="#ACDDDE") 
