@@ -19,7 +19,9 @@ Zhiquan Cui 1005835857: Exploratory Data Analysis, Model Validation and Diagnost
 \tableofcontents
 \newpage
 
-```{r, include=FALSE, error=FALSE, warning=FALSE, message=FALSE, results='hide'}
+
+# Load Required Libraries
+```{r, error=FALSE, warning=FALSE, message=FALSE, results='hide'}
 library(dplyr)
 library(insight)
 library(knitr)
@@ -36,11 +38,7 @@ library(ROCR)
 library(ResourceSelection)
 ```
 
-# Introduction
-
-# Exploratory Data Analysis
-
-## Load Data & Inspect Variables
+# Load Data & Inspect Variables
 ```{r}
 # Read the data
 data <- read.csv("Credit.csv")
@@ -88,8 +86,8 @@ them are qualitative variables. Here is a summary of the variables:
 We can see that the **quantitative variables** include duration, amount and age, while **qualitative variables** include
 status, credit_history, purpose, savings, employment_duration, installment_rate, personal_status_sex, other_debtors, present_residence, property, other_installment_plans, housing, number_credits, job, people_liable, telephone, foreign_worker and credit_risk.
 
-## Univariate Data Analysis & Visualization
-### Histogram of Quantitative Variables
+# Univariate Data Analysis & Visualization
+## Histogram of Quantitative Variables
 First we will perform univariate analysis on each of the variables and look at their distribution. Here is the 
 summary statistics:
 ```{r}
@@ -102,7 +100,7 @@ summary(data[, quant_vars])
 ```
 
 Next, let us check the histograms of the quantitative variables:
-```{r message=FALSE, fig.height=3, fig.width=5, fig.align='center'}
+```{r message=FALSE, fig.height=3, fig.width=7, fig.align='center'}
 data[, quant_vars] %>% 
   gather() %>% 
   ggplot(aes(value)) +
@@ -111,7 +109,7 @@ data[, quant_vars] %>%
     theme_light()
 ```
 
-### Barplot of Qualitative Variables
+## Barplot of Qualitative Variables
 Then, let us check the barplots of qualitative variables:
 ```{r fig.height=5, fig.width=10, fig.align='center'}
 data[, qual_vars] %>%
@@ -126,11 +124,11 @@ As we can see, the response variable credit risk is a binary variable while we
 have more than 2 predictors. This indicates that it is a good idea to use 
 Multiple Logistic Regression as our model.
 
-### Boxplot of Quantitative Variables
+## Boxplot of Quantitative Variables
 After checking the histograms and barplots, we will check the boxplots of the quantitative variables.
 Here we will not check barplots for qualitative variables because it only makes sense to examine the median,
 first and third quartiles and maximum value for quantitative variables. 
-```{r fig.align='center', fig.height=3, fig.width=5}
+```{r fig.align='center', fig.height=2, fig.width=8}
 g1 <- ggplot(data, aes(x = amount)) + geom_boxplot(fill="#FEF8DD") 
 g2 <- ggplot(data, aes(x = duration)) + geom_boxplot(fill="#E1F8DC") 
 g3 <- ggplot(data, aes(x = age)) + geom_boxplot(fill="#ACDDDE") 
@@ -141,7 +139,7 @@ From the above box plots, we can see that there are a few outliers for the varia
 we look at the histogram of variable amount, we can see that it is a right skewed distribution
 with a long right tail, which results in these outliers.
 
-### Sample Odds of Binary Variables
+## Sample Odds of Binary Variables
 For binary variables people_liable, telephone, foreign_worker and credit_risk, we can calculate and 
 interpret the sample odds:
 ```{r}
@@ -162,8 +160,8 @@ is 2.33 times as likely as having a bad credit. Similarly, the estimated probabi
 of a person to have a telephone landline registered on his/her name is 0.68 times 
 as likely as not having such a telephone landline.
 
-## Multivariate Data Analysis & Visualization
-### Quantitative Variable
+# Multivariate Data Analysis & Visualization
+## Quantitative Variable
 First, let us look at the correlation plots of the quantitative variables.
 ```{r fig.align='center', fig.height=3, fig.width=5}
 corrplot.mixed(cor(data[quant_vars]), lower='number', upper='ellipse', order='AOE')
@@ -190,7 +188,14 @@ variable amount.
 
 Therefore, we will drop the variable amount.
 
-### Qualitative Variables
+```{r fig.align='center', fig.height=3, fig.width=4}
+data <- subset(data, age < 60)
+ggplot(data, aes(x=as.factor(credit_risk), y=age, color=credit_risk)) +
+      geom_boxplot() + xlab("Credit Risk")
+```
+
+
+## Qualitative Variables
 After examining the quantitative variables, we will now look at the qualitative variables. Since they are not continuous and numeric data, we should not use the same methodology as above. Instead, we will use Pearson's Chi-sq Test of Indepence and Cramer's V designed for qualitative variables to examine the data.
 ```{r}
 Pearson_chisq_test <- data.frame(matrix(0, ncol = length(qual_vars), 
@@ -202,6 +207,9 @@ for (var in qual_vars) {
     Pearson_chisq_test[var, var_2] <- test$p.value
   }
 }
+```
+
+```{r echo=FALSE}
 kable(Pearson_chisq_test[, 1:6], format = "latex", booktabs=TRUE) %>%
   kable_styling(font_size = 6, latex_options = "hold_position")
 kable(Pearson_chisq_test[, 7:12], format = "latex", booktabs=TRUE) %>%
@@ -209,6 +217,7 @@ kable(Pearson_chisq_test[, 7:12], format = "latex", booktabs=TRUE) %>%
 kable(Pearson_chisq_test[, 13:17], format = "latex", booktabs=TRUE) %>%
   kable_styling(font_size = 6, latex_options = "hold_position")
 ```
+
 
 Based on the above table, we conclude that the following predictors are dependent 
 to most of the predictors with $\alpha=0.05$ according to Pearson's Chi-sq Test of Independence,
@@ -261,36 +270,36 @@ To summarize, the variables we will use in model building are:
 # Model Building and Model Selection
 ## Data Preparation
 ```{r}
-data.credit = read.csv("Credit.csv")
 # Transform categorical variables
-data.credit$credit_risk = as.factor(data.credit$credit_risk)
-data.credit$status  = as.factor(data.credit$status)
-data.credit$savings = as.factor(data.credit$savings)
-data.credit$property = as.ordered(data.credit$property)
-data.credit$other_installment_plans = as.factor(data.credit$other_installment_plans)
+data$credit_risk = as.factor(data$credit_risk)
+data$status  = as.factor(data$status)
+data$savings = as.factor(data$savings)
+# data$property = as.ordered(data$property)
+data$other_installment_plans = as.factor(data$other_installment_plans)
 ```
 
+Here we treat property as a quantitative variable as it is an ordinal variable.
 We will split the dataset into training set and testing set. Here, the split rate
 is set to be 0.75.
 
 ```{r}
 set.seed(1006742107)
 
-n = nrow(data.credit)
+n = nrow(data)
 index = sample(n, round(0.75 * n), replace = FALSE)
-traindata = data.credit[index, ]
-testdata = data.credit[-index, ]
+traindata = data[index, ]
+testdata = data[-index, ]
 ```
 
 ## Main effect model
-#### Forward method
+### Forward method
 ```{r, results='hide'}
 step(glm(credit_risk ~ 1, family = binomial, data = traindata), scope = 
        ~status + duration + savings + property + age +
        other_installment_plans, direction = "forward", test = "Chisq")
 ```
 
-#### Backward method
+### Backward method
 ```{r, results='hide'}
 step(glm(credit_risk ~status + duration + savings + property + age + 
            other_installment_plans, family = binomial, data = traindata), test = "Chisq")
@@ -302,6 +311,7 @@ From above coding, we could find that both forward selection and backward elimin
 \[-0.07\cdot P_C+0.02\cdot A+0.20\cdot O_1+0.59\cdot O_2\]
 
 where
+
 * $S_i$'s are dummy variables for status
 * D is duration
 * $SV$'s are dummy variables for savings
@@ -309,15 +319,75 @@ where
 * A is age
 * $O_i$'s are dummy variables for other_installment_plans
 
-```{r}
+```{r results='hide'}
 bestmodel.1 = glm(credit_risk ~status + duration + savings + property + age + other_installment_plans, family = binomial, data = traindata)
 summary(bestmodel.1)
 ```
 
-## Interaction model
-```{r, results='hide'}
-bestmodel.3 <- step(glm(credit_risk ~ 1, family = binomial, data = traindata), scope = ~status * duration * savings * property * age * other_installment_plans, direction = "forward", test = "Chisq")
+### Mannual Selection
+From the above output, we can see that savings2 and Savings3, other_installment_plans2
+seem to be insignificant. Therefore, we may consider combining level 1, 2 and 3 of savings.
+This also makes sense intuitively because people with no savings account, those 
+with less than 100 DM in the savings account and those with between 100 DM and 500
+DM might be treated similarly on the determination of their credit status. As for
+other_installment_plans, maybe only 'yes' or 'no' to the question makes a difference.
+
+```{r results='hide'}
+levels(traindata$savings) <- c(2, 2, 2, 4, 5)
+levels(traindata$other_installment_plans) <- c(2, 2, 3)
+bestmodel.1 = step(glm(credit_risk ~ 1, family = binomial, data = traindata), scope = 
+       ~status + duration + savings + property + age +
+       other_installment_plans, direction = "forward", test = "Chisq")
 ```
+
+```{r}
+summary(bestmodel.1)
+```
+
+Now the combined levels become significat predictors. The AIC of the model also 
+dropped. Next, we will try to include some interaction terms and see whether we 
+can obtain a better model.
+
+## Interaction model
+### StepAIC Algorithm
+```{r, results='hide'}
+bestmodel.2 <- step(glm(credit_risk ~ 1, family = binomial, data = traindata), 
+                    scope = ~status * duration * savings * property * age * 
+                      other_installment_plans, direction = "both", test = "Chisq")
+```
+
+Check the selected interaction model.
+```{r}
+summary(bestmodel.2)
+```
+
+### Manual Selection
+Since the selected model doesn't give significant predictors, we will try adding
+the interaction term mannually.
+```{r}
+fit1 <- glm(credit_risk~status * (duration + savings + property + age + other_installment_plans),
+            family = binomial, data = traindata)
+fit2 <- glm(credit_risk~status + savings * (duration + property + age) + other_installment_plans,
+            family = binomial, data = traindata)
+fit3 <- glm(credit_risk~status + property * (savings + duration + age + other_installment_plans),
+            family = binomial, data = traindata)
+fit4 <- glm(credit_risk~status + age * (savings + duration + property + other_installment_plans),
+            family = binomial, data = traindata)
+fit5 <- glm(credit_risk~status + other_installment_plans * (savings + duration + property + age),
+            family = binomial, data = traindata)
+fit6 <- glm(credit_risk~status + savings + duration + property + age + other_installment_plans,
+            family = binomial, data = traindata)
+bestmodel.1 <- fit2
+```
+
+Since the above model has a lower AIC and the majority of its predictors are 
+significant, we decide to choose this as our final model.
+
+## Final Model
+```{r}
+summary(bestmodel.1)
+```
+
 
 
 # Model Validation and Diagnostics
@@ -328,7 +398,9 @@ data and check the resulting ROC, AUC, and perform Goodness of Fit Test.
 
 ## ROC Curve and AUC
 ```{r message=FALSE, fig.align='center', fig.height=10, fig.width=10}
-pred.3 <- predict(bestmodel.3, newdata = testdata)
+levels(testdata$savings) <- c(2, 2, 2, 4, 5)
+levels(testdata$other_installment_plans) <- c(2, 2, 3)
+pred.3 <- predict(bestmodel.1, newdata = testdata)
 par(mfrow=c(2,2))
 plot(testdata$credit_risk, inv.logit(pred.3), xlab = "Actual credit_risk", ylab = "Predicted credit_risk")
 roc(testdata$credit_risk~inv.logit(pred.3), plot=TRUE, main="ROC Curve", col="blue", print.auc=TRUE)
@@ -347,7 +419,7 @@ here, we will apply the Hosmer-Lemeshow Test.
 ```{r}
 saturated_model <- glm(credit_risk~status * duration * savings * property * age * other_installment_plans,
                        family = binomial, data = traindata)
-hoslem.test(bestmodel.3$y, fitted(bestmodel.3), g=11)
+hoslem.test(bestmodel.1$y, fitted(bestmodel.1), g=11)
 ```
 
 We can see that the p-value of the Hosmer-Lemeshow Test is 0.7761 which is much
@@ -370,14 +442,14 @@ We can see that the cutoff probability is 0.708. This actually corresponds to th
 credit_risk odds ratio of 2.33 we got from Exploratory Data Analysis.
 
 Based on the above classification table, we can calculate the followings:
-\[sensitivity=\frac{130}{130+47}=0.7345\]
-\[specificity=\frac{47}{47+26}=0.6438\]
+\[sensitivity=\frac{121}{121+54}=0.6914\]
+\[specificity=\frac{47}{47+15}=0.7581\]
 Since the model has a high sensitivity and specificity, we have strong confidence that
 the model fits the data well.
 
 ## Residual Diagnostics
 ```{r fig.align='center', fig.height=5, fig.width=5}
-hist(rstandard(bestmodel.3), main = "Histogram of Standardized Deviance Residuals",
+hist(rstandard(bestmodel.1), main = "Histogram of Standardized Deviance Residuals",
      xlab = "Standardized Deviance Residual")
 ```
 
