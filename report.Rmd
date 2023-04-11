@@ -3,63 +3,36 @@ title: \vspace{3.5in} **Predicting the Status of Credit**
 date: "`r Sys.Date()`"
 output: 
     pdf_document:
-      number_sections: yes
     html_document:
       toc: true
 ---
 \begin{center}
-Lu Zheng: Model Building, Model Selection\\
+Lu Zheng 1006742107: Model Building, Model Selection\\
 \vspace{0.5in}
-Yuxin Yao: Model Building, Model Selection\\
+Yuxin Yao 1006917516: Model Building, Model Selection\\
 \vspace{0.5in}
 Zhiquan Cui 1005835857: Exploratory Data Analysis, Model Validation and Diagnostics
 \end{center}
 
 \newpage
-\tableofcontents
-\newpage
+# Background and Significance
+Predicting credit status involves assessing a person's ability to repay a loan 
+based on factors such as credit score, income, debt-to-income ratio, employment
+history, and other financial indicators (Fontinelle, 2023). Financial institutions use predictive 
+models and algorithms to make informed lending decisions and minimize the risk 
+of default. Credit scores are a key factor in predicting credit status, and 
+lenders also take into account other factors that can affect a borrower's 
+ability to repay a loan. Overall, predicting credit status is a complex process 
+that requires assessing a range of factors and weighing the potential risks and 
+benefits of each loan. A study builts a linier discriminant function and shows that 
+credit status is related to factors including checking amount and other installment
+plans (Aidi & Sari, 2012). 
 
-
-# Load Required Libraries
-```{r, error=FALSE, warning=FALSE, message=FALSE, results='hide'}
-library(dplyr)
-library(insight)
-library(knitr)
-library(kableExtra)
-library(ggplot2)
-library(tidyverse)
-library(corrplot)
-library(patchwork)
-library(rcompanion)
-library(gridExtra)
-library(boot)
-library(pROC)
-library(ROCR)
-library(ResourceSelection)
-```
-
-# Load Data & Inspect Variables
-```{r}
-# Read the data
-data <- read.csv("Credit.csv")
-# Check the number of observations and number of variables
-n <- nrow(data)
-m <- ncol(data)
-n
-m
-# Check the data
-kable(head(data[, 1:8]), format = "latex", align=rep("c", 8), booktabs=TRUE)
-kable(head(data[, 9:14]), format = "latex", align=rep("c", 6), booktabs=TRUE)
-kable(head(data[, 15:21]), format = "latex", align=rep("c", 7), booktabs=TRUE)
-# Check invalid or missing values
-anyNA(data)
-# Check the data type of each column
-sapply(data, class)
-```
-
-As we can see from the above outputs, there is no NaN values so the data is clean.
-And all of the columns are of type integer. Some of them are quantitative variable while some of 
-them are qualitative variables. Here is a summary of the variables:
+In this research, we aim to determine the main factors that influence one's credit
+status using a credit dataset containing 1000 customer profiles. From more than
+15 predictors, we will select the most significant ones to build a 
+multiple logistic regression model predicting the probability that a person has 
+good credit status. Here is a description of the variables:
 
 * status: status of the debtor's checking account with the bank (categorical)
 * duration: credit duration in months (quantitative)
@@ -83,14 +56,53 @@ them are qualitative variables. Here is a summary of the variables:
 * foreign_ worker: is the debtor a foreign worker? (binary)
 * credit_risk: has the credit contract been complied with (good) or not (bad)? (binary)
 
+
+```{r, echo=FALSE, error=FALSE, warning=FALSE, message=FALSE, results='hide'}
+library(dplyr)
+library(insight)
+library(knitr)
+library(kableExtra)
+library(tidyverse)
+library(corrplot)
+library(patchwork)
+library(rcompanion)
+library(gridExtra)
+library(boot)
+library(pROC)
+library(ROCR)
+library(ResourceSelection)
+library(gridExtra)
+library(arm)
+library(ggplot2)
+library(ggcorrplot)
+```
+
+# Exploratory Data Analysis
+```{r results='hide'}
+# Read the data
+data <- read.csv("Credit.csv")
+# Get the number of observations and number of variables
+n <- nrow(data)
+m <- ncol(data)
+n
+# Check invalid or missing values
+anyNA(data)
+# Check the data type of each column
+sapply(data, class)
+```
+
+After performing the above basic data checks, we can see that there is no NaN values so the data is clean.
+And all of the columns are of type integer. Some of them are quantitative variable while some of 
+them are qualitative variables. 
+
 We can see that the **quantitative variables** include duration, amount and age, while **qualitative variables** include
 status, credit_history, purpose, savings, employment_duration, installment_rate, personal_status_sex, other_debtors, present_residence, property, other_installment_plans, housing, number_credits, job, people_liable, telephone, foreign_worker and credit_risk.
 
-# Univariate Data Analysis & Visualization
-## Histogram of Quantitative Variables
+## Univariate Data Analysis & Visualization
+### Histogram of Quantitative Variables
 First we will perform univariate analysis on each of the variables and look at their distribution. Here is the 
 summary statistics:
-```{r}
+```{r echo=FALSE}
 quant_vars <- c("duration", "amount", "age")
 qual_vars <- c("status", "credit_history", "purpose", "savings", "employment_duration",
                "installment_rate", "personal_status_sex", "other_debtors", "present_residence", 
@@ -100,7 +112,7 @@ summary(data[, quant_vars])
 ```
 
 Next, let us check the histograms of the quantitative variables:
-```{r message=FALSE, fig.height=3, fig.width=7, fig.align='center'}
+```{r echo=FALSE, message=FALSE, fig.height=3, fig.width=7, fig.align='center'}
 data[, quant_vars] %>% 
   gather() %>% 
   ggplot(aes(value)) +
@@ -109,26 +121,26 @@ data[, quant_vars] %>%
     theme_light()
 ```
 
-## Barplot of Qualitative Variables
+### Barplot of Qualitative Variables
 Then, let us check the barplots of qualitative variables:
 ```{r fig.height=5, fig.width=10, fig.align='center'}
 data[, qual_vars] %>%
   gather() %>% 
   ggplot(aes(value)) +
     facet_wrap(~ key, scales = "free") +
-    geom_bar() + 
+    geom_bar() +
     theme_light()
 ```
 
 As we can see, the response variable credit risk is a binary variable while we 
-have more than 2 predictors. This indicates that it is a good idea to use 
+have more than 2 predictors. This indicates that it is a good idea to try
 Multiple Logistic Regression as our model.
-
-## Boxplot of Quantitative Variables
+ 
+### Boxplot of Quantitative Variables
 After checking the histograms and barplots, we will check the boxplots of the quantitative variables.
 Here we will not check barplots for qualitative variables because it only makes sense to examine the median,
 first and third quartiles and maximum value for quantitative variables. 
-```{r fig.align='center', fig.height=2, fig.width=8}
+```{r echo=FALSE, fig.align='center', fig.height=2, fig.width=8}
 g1 <- ggplot(data, aes(x = amount)) + geom_boxplot(fill="#FEF8DD") 
 g2 <- ggplot(data, aes(x = duration)) + geom_boxplot(fill="#E1F8DC") 
 g3 <- ggplot(data, aes(x = age)) + geom_boxplot(fill="#ACDDDE") 
@@ -139,10 +151,10 @@ From the above box plots, we can see that there are a few outliers for the varia
 we look at the histogram of variable amount, we can see that it is a right skewed distribution
 with a long right tail, which results in these outliers.
 
-## Sample Odds of Binary Variables
+### Sample Odds of Binary Variables
 For binary variables people_liable, telephone, foreign_worker and credit_risk, we can calculate and 
 interpret the sample odds:
-```{r}
+```{r echo=FALSE}
 binary_var <- c("Statistics", "people_liable", "telephone", "foreign_worker", "credit_risk")
 odds <- c("Sample Odds")
 for (var in binary_var[2:5]) {
@@ -160,16 +172,11 @@ is 2.33 times as likely as having a bad credit. Similarly, the estimated probabi
 of a person to have a telephone landline registered on his/her name is 0.68 times 
 as likely as not having such a telephone landline.
 
-# Multivariate Data Analysis & Visualization
-## Quantitative Variable
+## Multivariate Data Analysis & Visualization
+### Quantitative Variable
 First, let us look at the correlation plots of the quantitative variables.
-```{r fig.align='center', fig.height=3, fig.width=5}
-corrplot.mixed(cor(data[quant_vars]), lower='number', upper='ellipse', order='AOE')
-```
-
-From the above correlation plot, we can see that the correlation coefficient between amount and duration is as high as 0.62, which indicates a strong positive correlation between the two variables. This also makes sense intuitively because the longer credit duration one has in months, he/she will have a higher chance to build up his/her credit and obtain a higher credit amount. Similarly, if one has a high credit amount, then he/she is more likely to have a long credit duration. In order to avoid multicollinearity, we will consider droping one of amount and duration in our model. However, before making a decision, we shall examine the side by side box plots.
-
-```{r fig.align='center', fig.height=3, fig.width=10}
+```{r echo=FALSE, fig.align='center', fig.height=3, fig.width=10}
+g0 <- ggcorrplot(cor(data[quant_vars]), type="lower", lab=TRUE)
 g1 <- ggplot(data, aes(x=as.factor(credit_risk), y=amount, color=credit_risk)) +
       geom_boxplot() + xlab("Credit Risk")
 g2 <- ggplot(data, aes(x=as.factor(credit_risk), y=duration, color=credit_risk)) +
@@ -177,8 +184,21 @@ g2 <- ggplot(data, aes(x=as.factor(credit_risk), y=duration, color=credit_risk))
 g3 <- ggplot(data, aes(x=as.factor(credit_risk), y=age, color=credit_risk)) +
       geom_boxplot() + xlab("Credit Risk")
 
-grid.arrange(g1, g2, g3, nrow=1)
+grid.arrange(g0, g1, g2, g3, nrow=1)
 ```
+
+```{r echo=FALSE, fig.align='center', fig.height=3, fig.width=10}
+# g1 <- ggplot(data, aes(x=as.factor(credit_risk), y=amount, color=credit_risk)) +
+#       geom_boxplot() + xlab("Credit Risk")
+# g2 <- ggplot(data, aes(x=as.factor(credit_risk), y=duration, color=credit_risk)) +
+#       geom_boxplot() + xlab("Credit Risk")
+# g3 <- ggplot(data, aes(x=as.factor(credit_risk), y=age, color=credit_risk)) +
+#       geom_boxplot() + xlab("Credit Risk")
+# 
+# grid.arrange(g1, g2, g3, nrow=1)
+```
+
+From the above correlation plot, we can see that the correlation coefficient between amount and duration is as high as 0.62, which indicates a strong positive correlation between the two variables. This also makes sense intuitively because the longer credit duration one has in months, he/she will have a higher chance to build up his/her credit and obtain a higher credit amount. Similarly, if one has a high credit amount, then he/she is more likely to have a long credit duration. In order to avoid multicollinearity, we will consider droping one of amount and duration in our model. However, before making a decision, we shall examine the side by side box plots.
 
 From the above side by side box plots, we can see that for variables duration and age,
 there are significant differences on the box plots between two levels of credit risks.
@@ -188,15 +208,15 @@ variable amount.
 
 Therefore, we will drop the variable amount.
 
-```{r fig.align='center', fig.height=3, fig.width=4}
+```{r include=FALSE, fig.align='center', fig.height=3, fig.width=4}
 data <- subset(data, age < 60)
 ggplot(data, aes(x=as.factor(credit_risk), y=age, color=credit_risk)) +
       geom_boxplot() + xlab("Credit Risk")
 ```
 
 
-## Qualitative Variables
-After examining the quantitative variables, we will now look at the qualitative variables. Since they are not continuous and numeric data, we should not use the same methodology as above. Instead, we will use Pearson's Chi-sq Test of Indepence and Cramer's V designed for qualitative variables to examine the data.
+### Qualitative Variables
+After examining the quantitative variables, we will now look at the qualitative variables. Since they are not continuous and numeric data, we should not use the same methodology as above. Instead, we will group the data and then use Pearson's Chi-sq Test of Indepence designed for qualitative variables to examine the data.
 ```{r}
 Pearson_chisq_test <- data.frame(matrix(0, ncol = length(qual_vars), 
                                 nrow = length(qual_vars)), row.names = qual_vars)
@@ -209,7 +229,7 @@ for (var in qual_vars) {
 }
 ```
 
-```{r echo=FALSE}
+```{r include=FALSE}
 kable(Pearson_chisq_test[, 1:6], format = "latex", booktabs=TRUE) %>%
   kable_styling(font_size = 6, latex_options = "hold_position")
 kable(Pearson_chisq_test[, 7:12], format = "latex", booktabs=TRUE) %>%
@@ -219,18 +239,13 @@ kable(Pearson_chisq_test[, 13:17], format = "latex", booktabs=TRUE) %>%
 ```
 
 
-Based on the above table, we conclude that the following predictors are dependent 
-to most of the predictors with $\alpha=0.05$ according to Pearson's Chi-sq Test of Independence,
-and we consider dropping these predictors:
-
-* job
-* credit_history
-* purpose
-* employment_duration
-* housing
-* people_liable
+Based on the p-value table, we conclude that the following predictors are dependent 
+to most of the predictors with $\alpha=0.05$ because of their small p-values,
+and we consider dropping these predictors: job, credit_history, purpose, employment_duration,
+housing and people_liable.
 
 ```{r include=FALSE}
+# Also verified the result using Cramer's V table
 # Cramer_v <- data.frame(matrix(0, ncol = length(qual_vars),
 #                       nrow = length(qual_vars)), row.names = qual_vars)
 # colnames(Cramer_v) <- qual_vars
@@ -246,26 +261,34 @@ and we consider dropping these predictors:
 ```
 
 Also, we can see that the following predictors have very weak association
-with the response variable:
+with the response variable because of a large p-value: installment_rate, personal_status_sex,
+other_debtors, present_residence, number_credits, job, people_liable, telephone, foreign_worker.
 
-* installment_rate
-* personal_status_sex
-* other_debtors
-* present_residence
-* number_credits
-* job
-* people_liable
-* telephone
-* foreign_worker
+To summarize, the qualitative variables we will use in model building are: status,
+savings, property and other_installment_plans, while the quantitative
+variables are duration and age.
 
-To summarize, the variables we will use in model building are:
+Now, let us look at their bar plots with the response variable to visualize the 
+differences of responese variable between different levels.
 
-* status
-* duration
-* savings
-* property
-* age
-* other_installment_plans
+```{r echo=FALSE, fig.height=5, fig.width=10}
+g1 <- ggplot(data = data) +
+  geom_bar(aes(x = status, fill = as.factor(credit_risk))) + 
+  labs(y = "Proportion", fill = "Credit Status") +
+  ggtitle("Credit Status vs. Status")
+g2 <- ggplot(data = data) +
+  geom_bar(aes(x = savings, fill = as.factor(credit_risk))) +
+  labs(y = "Proportion", fill = "Credit Status", title = "Credit Status vs. Savings")
+g3 <- ggplot(data = data) +
+  geom_bar(aes(x = other_installment_plans, fill = as.factor(credit_risk))) +
+  labs(y = "Proportion", fill = "Credit Status", 
+       title = "Credit Status vs. Other Installment Plans")
+g4 <- ggplot(data = data) +
+  geom_bar(aes(x = property, fill = as.factor(credit_risk))) +
+  labs(y = "Proportion", fill = "Credit Status", title = "Credit Status vs. Property")
+grid.arrange(g1, g2, g3, g4, ncol=2, nrow=2)
+```
+
 
 # Model Building and Model Selection
 ## Data Preparation
@@ -274,7 +297,6 @@ To summarize, the variables we will use in model building are:
 data$credit_risk = as.factor(data$credit_risk)
 data$status  = as.factor(data$status)
 data$savings = as.factor(data$savings)
-# data$property = as.ordered(data$property)
 data$other_installment_plans = as.factor(data$other_installment_plans)
 ```
 
@@ -284,7 +306,6 @@ is set to be 0.75.
 
 ```{r}
 set.seed(1006742107)
-
 n = nrow(data)
 index = sample(n, round(0.75 * n), replace = FALSE)
 traindata = data[index, ]
@@ -292,42 +313,37 @@ testdata = data[-index, ]
 ```
 
 ## Main effect model
-### Forward method
+### Forward Selection & Backward Elimination
 ```{r, results='hide'}
+# Forward Selection
 step(glm(credit_risk ~ 1, family = binomial, data = traindata), scope = 
        ~status + duration + savings + property + age +
        other_installment_plans, direction = "forward", test = "Chisq")
-```
-
-### Backward method
-```{r, results='hide'}
+# Backward Elimination
 step(glm(credit_risk ~status + duration + savings + property + age + 
            other_installment_plans, family = binomial, data = traindata), test = "Chisq")
 ```
 
-From above coding, we could find that both forward selection and backward elimination choose the model: glm(credit_risk ~status + duration + savings + property + age + other_installment_plans, family = binomial, data = traindata)
+We find that both forward selection and backward elimination choose the same model
+which includes all of the given predictors.
 
-\[logit(\hat\pi)=-0.72+0.45\cdot S_1+0.86\cdot S_2+1.75\cdot S_3-0.03\cdot D+0.26\cdot SV_1+0.14\cdot SV_2+1.50SV_3+0.73SV_4-0.58\cdot P_L-0.16\cdot P_Q\]
-\[-0.07\cdot P_C+0.02\cdot A+0.20\cdot O_1+0.59\cdot O_2\]
+<!-- \[logit(\hat\pi)=-0.123+0.54S_2+0.98S_3+1.90S_4-0.03D+0.10SV_2+0.41SV_3+1.08SV_4+0.66SV_5-0.30P+0.03A -->
+<!-- -0.13O_2+0.45O_3\] -->
 
-where
+<!-- where -->
 
-* $S_i$'s are dummy variables for status
-* D is duration
-* $SV$'s are dummy variables for savings
-* $P_i$'s are dummy variables for property
-* A is age
-* $O_i$'s are dummy variables for other_installment_plans
-
-```{r results='hide'}
-bestmodel.1 = glm(credit_risk ~status + duration + savings + property + age + other_installment_plans, family = binomial, data = traindata)
-summary(bestmodel.1)
-```
+<!-- * $S_i$'s are dummy variables for status -->
+<!-- * D is duration -->
+<!-- * $SV$'s are dummy variables for savings -->
+<!-- * $P_i$'s are dummy variables for property -->
+<!-- * A is age -->
+<!-- * $O_i$'s are dummy variables for other_installment_plans -->
 
 ### Mannual Selection
-From the above output, we can see that savings2 and Savings3, other_installment_plans2
-seem to be insignificant. Therefore, we may consider combining level 1, 2 and 3 of savings.
-This also makes sense intuitively because people with no savings account, those 
+However, from the above selected model, we see that savings2 and Savings3, other_installment_plans2
+seem to be insignificant. We think the reason could be these levels are correlated to each
+other and results in multicollinearity. Therefore, we may consider combining level 1, 2 
+and 3 of savings. This also makes sense intuitively because people with no savings account, those 
 with less than 100 DM in the savings account and those with between 100 DM and 500
 DM might be treated similarly on the determination of their credit status. As for
 other_installment_plans, maybe only 'yes' or 'no' to the question makes a difference.
@@ -340,30 +356,25 @@ bestmodel.1 = step(glm(credit_risk ~ 1, family = binomial, data = traindata), sc
        other_installment_plans, direction = "forward", test = "Chisq")
 ```
 
-```{r}
-summary(bestmodel.1)
-```
-
 Now the combined levels become significat predictors. The AIC of the model also 
 dropped. Next, we will try to include some interaction terms and see whether we 
 can obtain a better model.
 
 ## Interaction model
-### StepAIC Algorithm
+### Forward Selection & Backward Elimination
 ```{r, results='hide'}
 bestmodel.2 <- step(glm(credit_risk ~ 1, family = binomial, data = traindata), 
                     scope = ~status * duration * savings * property * age * 
                       other_installment_plans, direction = "both", test = "Chisq")
 ```
 
-Check the selected interaction model.
-```{r}
-summary(bestmodel.2)
-```
+We find that the selected model by the algorithm gives lot of insignificant 
+predictors. Therefore, we decide to perform mannual selection to eliminate the
+problems of multicollinearity.
 
-### Manual Selection
-Since the selected model doesn't give significant predictors, we will try adding
-the interaction term mannually.
+### Manual Selection & Final Model
+Here, we try to add interaction term between variables one by one and remove those
+insignificant predictors.
 ```{r}
 fit1 <- glm(credit_risk~status * (duration + savings + property + age + other_installment_plans),
             family = binomial, data = traindata)
@@ -378,16 +389,26 @@ fit5 <- glm(credit_risk~status + other_installment_plans * (savings + duration +
 fit6 <- glm(credit_risk~status + savings + duration + property + age + other_installment_plans,
             family = binomial, data = traindata)
 bestmodel.1 <- fit2
+summary(fit2)
 ```
 
-Since the above model has a lower AIC and the majority of its predictors are 
-significant, we decide to choose this as our final model.
+After comparing all the mannually constructed model, we decided to choose 
+model fit2 as our final model because most of its predictors are significant 
+and its AIC is lower than the selected main effect model.
 
-## Final Model
-```{r}
-summary(bestmodel.1)
-```
+<!-- \[logit(\hat\pi)=-0.23+0.60S_2+1.04S_3+1.98S_4-0.04D+7.64SV_2-0.13SV_3-0.29P+0.03A -->
+<!-- +0.57O_2\] -->
+<!-- \[+0.06SV_2\cdot D+0.05SV_3\cdot D-1.24SV_2\cdot P+0.19SV_3\cdot P-0.13SV_2\cdot A -->
+<!-- -0.03SV_3\cdot A\] -->
 
+<!-- where -->
+
+<!-- * $S_i$'s are dummy variables for status -->
+<!-- * D is duration -->
+<!-- * $SV$'s are dummy variables for savings -->
+<!-- * $P_i$'s are dummy variables for property -->
+<!-- * A is age -->
+<!-- * $O_i$'s are dummy variables for other_installment_plans -->
 
 
 # Model Validation and Diagnostics
@@ -397,17 +418,16 @@ to examine the robustness of our model. Here, we run the final model with test
 data and check the resulting ROC, AUC, and perform Goodness of Fit Test.
 
 ## ROC Curve and AUC
-```{r message=FALSE, fig.align='center', fig.height=10, fig.width=10}
+```{r echo=FALSE, message=FALSE, fig.align='center', fig.height=10, fig.width=10}
 levels(testdata$savings) <- c(2, 2, 2, 4, 5)
 levels(testdata$other_installment_plans) <- c(2, 2, 3)
 pred.3 <- predict(bestmodel.1, newdata = testdata)
 par(mfrow=c(2,2))
 plot(testdata$credit_risk, inv.logit(pred.3), xlab = "Actual credit_risk", ylab = "Predicted credit_risk")
 roc(testdata$credit_risk~inv.logit(pred.3), plot=TRUE, main="ROC Curve", col="blue", print.auc=TRUE)
-auc(testdata$credit_risk~inv.logit(pred.3))
 ```
 
-As we can see from the above results, the area under the ROC is 0.7659, which is
+As we can see from the above results, the area under the ROC is 0.772, which is
 fairly large. Also, the estimated probability of having good credit is lower when
 the actual credit risk is high compared to when the actual credit risk is low. Based
 on these two results, we can have some confidence on the robustness of the model.
@@ -416,52 +436,113 @@ on these two results, we can have some confidence on the robustness of the model
 Now, we will perform Goodness of Fit Test. Since we are dealing with ungrouped data
 here, we will apply the Hosmer-Lemeshow Test.
 
-```{r}
+```{r echo=FALSE, warning=FALSE, message=FALSE}
 saturated_model <- glm(credit_risk~status * duration * savings * property * age * other_installment_plans,
                        family = binomial, data = traindata)
 hoslem.test(bestmodel.1$y, fitted(bestmodel.1), g=11)
 ```
 
-We can see that the p-value of the Hosmer-Lemeshow Test is 0.7761 which is much
+We can see that the p-value of the Hosmer-Lemeshow Test is 0.1622 which is much
 larger than the significance level $\alpha=0.05$. Therefore, we fail to reject the 
 null hypothesis and conclude that the selected model fits the data well.
 
-## Classification Table and Predictive Power
-Next, we will analyse the predictive power of the selected model. 
-```{r}
+## Predictive Power and Residual Diagnostics
+```{r echo=FALSE}
 # Calculate the cutoff probability
 n <- dim(testdata)[1]
 prop <- sum(testdata$credit_risk == 1) / n
-prop
-
 y <- (testdata$credit_risk == 1) * 1
 predicted <- as.numeric(pred.3 > prop)
 xtabs(~y + predicted)
 ```
-We can see that the cutoff probability is 0.708. This actually corresponds to the 
-credit_risk odds ratio of 2.33 we got from Exploratory Data Analysis.
+We can see that the cutoff probability is 0.74. This actually corresponds to the 
+credit_risk odds ratio of 2.33 we got from Exploratory Data Analysis. Based on 
+the above classification table, we can calculate the sensitivity is 0.6914
+and the specificity is 0.7581. Since the model has a high sensitivity and specificity, 
+we have strong confidence that the model fits the data well.
 
-Based on the above classification table, we can calculate the followings:
-\[sensitivity=\frac{121}{121+54}=0.6914\]
-\[specificity=\frac{47}{47+15}=0.7581\]
-Since the model has a high sensitivity and specificity, we have strong confidence that
-the model fits the data well.
-
-## Residual Diagnostics
-```{r fig.align='center', fig.height=5, fig.width=5}
-hist(rstandard(bestmodel.1), main = "Histogram of Standardized Deviance Residuals",
-     xlab = "Standardized Deviance Residual")
+```{r echo=FALSE, fig.align='center', fig.height=6.5, fig.width=10}
+par(mfrow=c(2,2))
+hist(rstandard(bestmodel.1), xlab = "Standardized Deviance Residual",
+     main = "Histogram of Standardized Deviance Residuals")
+plot(predict(bestmodel.1), residuals(bestmodel.1), 
+     main="Fitted Value v.s. Standardized Deviance Residuals",
+    xlab="Predicted Probability", ylab="Standardized Deviance Residuals")
+abline(h=0,lty=2,col="grey")
+binnedplot(predict(bestmodel.1), residuals(bestmodel.1), 
+           xlab = "Predicted Probabilities", 
+           main = "Binned Residual vs. Predicted Values", col.int = FALSE)
 ```
 
-Based on the above residual histogram, we can see that there is no extreme value
-of residuals and the majority of the values is between -2 and 2. Therefore, we 
-conclude that the selected model fits the data well.
+<!-- Then, let's look at the residuals versus quantitative variables, namely duration, -->
+<!-- property and age. -->
 
-In summary, we examined the ROC, AUC, Hosmer-Lemeshow Test and Predictive Power of the
-model. We found out the AUC is high, the p-value of Hosmer-Lemeshow Test is very large, the 
-high sensitivity and high specificity of the model indicates a strong predictive power. All
-these clues show that the selected model is a robust model.
+<!-- ```{r} -->
+<!-- binnedplot(traindata$duration, residuals(bestmodel.1),  -->
+<!--            xlab = "Duration",  -->
+<!--            main = "Binned Residual vs. Duration", col.int = FALSE) -->
+<!-- binnedplot(traindata$property, residuals(bestmodel.1),  -->
+<!--            xlab = "Property",  -->
+<!--            main = "Binned Residual vs. Property", col.int = FALSE) -->
+<!-- binnedplot(traindata$age, residuals(bestmodel.1),  -->
+<!--            xlab = "Age",  -->
+<!--            main = "Binned Residual vs. Age", col.int = FALSE) -->
+<!-- ``` -->
+
+<!-- As we can see, the average residuals plots look fairly symmetric around 0.  -->
+
+<!-- Then, let's look at the residuals versus qualitative variables, namely -->
+<!-- status, savings and other_installment_plans. -->
+
+<!-- ```{r} -->
+<!-- binnedplot(as.numeric(traindata$status), residuals(bestmodel.1),  -->
+<!--            xlab = "Status",  -->
+<!--            main = "Binned Residual vs. Status", col.int = FALSE) -->
+<!-- binnedplot(as.numeric(traindata$savings), residuals(bestmodel.1),  -->
+<!--            xlab = "Savings",  -->
+<!--            main = "Binned Residual vs. Savings", col.int = FALSE) -->
+<!-- binnedplot(as.numeric(traindata$other_installment_plans), residuals(bestmodel.1),  -->
+<!--            xlab = "Other Installment Plans",  -->
+<!--            main = "Binned Residual vs. Other Installment Plans", col.int = FALSE) -->
+<!-- ``` -->
+
+
+Based on the above residual histogram, we can see that there is no extreme value
+of residuals and the majority of the values is between -2 and 2. More importantly,
+as we look at the binned residual plot, we can see that the mean residuals is near
+to 0. 
+
+In summary, we examined the ROC, AUC, Hosmer-Lemeshow Test, Predictive Power of the
+model and residual diagnostics. We found out the AUC is high, the p-value of 
+Hosmer-Lemeshow Test is large, the high sensitivity and high specificity of the
+model indicates a strong predictive power. The mean residuals is near to 0 and near
+to normal. All these clues show that the selected model is a robust model.
 
 # Discussion and Conclusion
+Based on this research, we successfully found several significant predictors for
+credit status, namely checking account status, savings amount, credit duration,
+the debtor's most valuable property, the debtor's age and debtor's stallment plans
+from providers other than the credit-giving bank. The most important determinants
+are duration and status. More specifically, whenever the credit duration increases 
+by 1 month, the odds of having good credit status will be multiplied by a factor of
+$e^{-0.039856}=0.96$, holding all else constant. Also, for people with checking account
+greater than or equal to 200 DM / salary for at least one year, their odds of having 
+good credit status is $e^{1.983709}=7.27$ times that for people with no
+checking account, holding all else constant. Such significant findings can help financial
+institutes to better assess a customer's credit status and issue credit limits.
+
+However, there are also limitations in our model. For example, our model can only 
+make predictions for people aged under 60 because we trimmed the data with age over 60
+in model training. Also, the data we used in this research are collected from German, rather
+than from different regions or countries around the world. More than half of observations 
+in our training set are with good credit status, which makes our model skewed
+in the prediction. Therefore, for future improvements, we could collect more data
+from seniors and from different regions to get more insight into the determinants 
+of credit risk. Also, it is a good idea to have more data of bad credit status to
+increase the reliability of our model.
 
 # References
+Fontinelle, A. (2023, April 5). The 5 biggest factors that affect your credit. Investopedia. Retrieved from https://www.investopedia.com/articles/pf/10/credit-score-factors.asp 
+
+Muhammad Nur Aidi and Resty Indah Sari. (2012) "Classification of debtor credit status and determination amount of credit risk by using linier discriminant function". AIP Conference Proceedings 1450, 280-285.
+Retrieved from https://doi.org/10.1063/1.4724155
